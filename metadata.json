@@ -1,0 +1,9 @@
+{
+  "name": "Swat DMS Enterprise",
+  "description": "Comprehensive Distribution Management System with Offline-First sync, PRS settlement, double-entry vouchers, and dual-invoice cost-cutting templates.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": []
+}
