@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, ReactNode } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { useWorkspace, WorkspaceProvider } from './lib/WorkspaceContext';
