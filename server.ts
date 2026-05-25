@@ -4,8 +4,29 @@ import path from "path";
 import { fileURLToPath } from "url";
 import Database from "better-sqlite3";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const getFilename = () => {
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    return fileURLToPath(import.meta.url);
+  }
+  if (typeof module !== "undefined" && module.filename) {
+    return module.filename;
+  }
+  return "";
+};
+
+const getDirname = () => {
+  const fn = getFilename();
+  if (fn) {
+    return path.dirname(fn);
+  }
+  if (typeof __dirname !== "undefined") {
+    return __dirname;
+  }
+  return "";
+};
+
+const __filename = getFilename();
+const __dirname = getDirname();
 
 const db = new Database("erp.db");
 db.pragma('journal_mode = WAL');
