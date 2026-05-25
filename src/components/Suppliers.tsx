@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, Plus, Search, History, CreditCard, Landmark, ArrowRightLeft } from 'lucide-react';
 import { motion } from 'motion/react';
+import { formatDate } from '../lib/dateUtils';
 
 interface Supplier {
   id: number;
@@ -173,9 +174,30 @@ export default function Suppliers() {
                 >
                   Settle Payment
                 </button>
-                <div className="absolute right-[-20px] bottom-[-20px] opacity-10">
-                  <CreditCard className="w-48 h-48" />
-                </div>
+              </div>
+
+              <div className="flex justify-end pr-4">
+                <button 
+                  onClick={async () => {
+                    const c1 = confirm(`Are you sure you want to delete supplier "${selectedSupplier.name}"?`);
+                    if (!c1) return;
+                    const c2 = confirm(`FINAL CHECK: This will remove all their ledger history. Proceed?`);
+                    if (!c2) return;
+                    
+                    try {
+                      const res = await fetch(`/api/suppliers/${selectedSupplier.id}`, { method: 'DELETE' });
+                      if (res.ok) {
+                        setSelectedSupplier(null);
+                        fetchSuppliers();
+                      }
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  className="text-[9px] font-black uppercase tracking-widest text-rose-500 hover:text-rose-700 transition-all flex items-center gap-1.5"
+                >
+                  Delete Supplier Account
+                </button>
               </div>
 
               <div className="erp-card !p-0">
@@ -199,7 +221,7 @@ export default function Suppliers() {
                       {ledger.map(entry => (
                         <tr key={entry.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                           <td className="p-4">
-                            <div className="text-xs font-bold text-slate-900">{new Date(entry.date).toLocaleDateString()}</div>
+                            <div className="text-xs font-bold text-slate-900">{formatDate(entry.date)}</div>
                           </td>
                           <td className="p-4">
                             <div className="text-xs font-medium text-slate-900">{entry.description}</div>

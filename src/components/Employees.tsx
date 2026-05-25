@@ -9,6 +9,8 @@ import {
   Trash2, 
   Edit,
   Phone,
+  Power,
+  Slash,
   BarChart,
   UserPlus,
   Calendar,
@@ -16,6 +18,7 @@ import {
   Coins
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatDate } from '../lib/dateUtils';
 
 interface Employee {
   id: number;
@@ -24,6 +27,9 @@ interface Employee {
   contact: string;
   base_salary: number;
   commission_pc: number;
+  food_allowance: number;
+  working_days: number;
+  status: string;
   target?: number;
 }
 
@@ -76,6 +82,9 @@ export default function Employees() {
     contact: '',
     base_salary: 0,
     commission_pc: 0,
+    food_allowance: 0,
+    working_days: 26,
+    status: 'active',
     target: 0
   });
 
@@ -97,9 +106,14 @@ export default function Employees() {
   });
 
   const fetchData = async () => {
-    const res = await fetch('/api/employees');
-    const data = await res.json();
-    setEmployees(data);
+    try {
+      const res = await fetch('/api/employees');
+      const data = await res.json();
+      setEmployees(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch employees", err);
+      setEmployees([]);
+    }
   };
 
   useEffect(() => {
@@ -107,17 +121,26 @@ export default function Employees() {
   }, []);
 
   const fetchPerformance = async (id: number) => {
-    const [perfRes, absRes, payRes, loanRes] = await Promise.all([
-      fetch(`/api/employees/${id}/performance`),
-      fetch(`/api/employees/${id}/absences`),
-      fetch(`/api/employees/${id}/payments`),
-      fetch(`/api/employees/${id}/loans`)
-    ]);
-    
-    setPerformance(await perfRes.json());
-    setAbsences(await absRes.json());
-    setPayments(await payRes.json());
-    setLoans(await loanRes.json());
+    try {
+      const [perfRes, absRes, payRes, loanRes] = await Promise.all([
+        fetch(`/api/employees/${id}/performance`),
+        fetch(`/api/employees/${id}/absences`),
+        fetch(`/api/employees/${id}/payments`),
+        fetch(`/api/employees/${id}/loans`)
+      ]);
+      
+      const perfData = await perfRes.json();
+      const absData = await absRes.json();
+      const payData = await payRes.json();
+      const loanDataRaw = await loanRes.json();
+
+      setPerformance(perfData);
+      setAbsences(Array.isArray(absData) ? absData : []);
+      setPayments(Array.isArray(payData) ? payData : []);
+      setLoans(Array.isArray(loanDataRaw) ? loanDataRaw : []);
+    } catch (err) {
+      console.error("Failed to fetch employee details", err);
+    }
   };
 
   const handleEdit = (employee: Employee) => {
@@ -140,7 +163,7 @@ export default function Employees() {
       body: JSON.stringify(formData)
     });
     setIsModalOpen(false);
-    setFormData({ name: '', role: 'Salesman', contact: '', base_salary: 0, commission_pc: 0, target: 0 });
+    setFormData({ name: '', role: 'Salesman', contact: '', base_salary: 0, commission_pc: 0, status: 'active', target: 0 });
     fetchData();
   };
 
@@ -181,23 +204,52 @@ export default function Employees() {
     fetchPerformance(selectedEmployee.id);
   };
 
-  const filteredEmployees = employees.filter(e => 
-    e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    e.role.toLowerCase().includes(searchQuery.toLowerCase())
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+  const filteredEmployees = safeEmployees.filter(e => 
+    (e.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (e.role || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const stats = {
-    totalPayroll: employees.reduce((acc, e) => acc + (e.base_salary || 0), 0),
-    totalCommission: employees.reduce((acc, e) => acc + (e.role === 'Salesman' ? 5000 : 0), 0), 
-    employeeCount: employees.length
+    totalPayroll: safeEmployees.reduce((acc, e) => acc + (e.base_salary || 0) + (e.food_allowance || 0), 0),
+    totalCommission: safeEmployees.reduce((acc, e) => acc + (e.role === 'Salesman' ? 5000 : 0), 0), 
+    employeeCount: safeEmployees.length
   };
 
-  const currentMonthAbsences = absences.filter(a => a.date.startsWith(new Date().toISOString().slice(0, 7)));
+  const safeAbsences = Array.isArray(absences) ? absences : [];
+  const currentMonthAbsences = safeAbsences.filter(a => (a.date || '').startsWith(new Date().toISOString().slice(0, 7)));
+  
+  // Salary Automation Logic
+  const dailyRate = (selectedEmployee?.base_salary || 0) / (selectedEmployee?.working_days || 26);
   const totalDeductions = currentMonthAbsences.reduce((acc, a) => acc + (a.deduction_amount || 0), 0);
-  const activeLoans = loans.filter(l => l.status === 'Pending' || l.status === 'Active');
-  const totalLoanBalance = activeLoans.reduce((acc, l) => acc + l.amount, 0);
+  const safeLoans = Array.isArray(loans) ? loans : [];
+  const activeLoans = safeLoans.filter(l => l.status === 'Pending' || l.status === 'Active');
+  const advancesThisMonth = activeLoans.filter(l => l.type === 'Advance' && (l.date || '').startsWith(new Date().toISOString().slice(0, 7)));
+  const totalAdvanceTaken = advancesThisMonth.reduce((acc, l) => acc + (l.amount || 0), 0);
+  const totalLoanBalance = activeLoans.reduce((acc, l) => acc + (l.amount || 0), 0);
+  
   const projectedCommission = Math.round(((performance?.total_sales || 0) * (selectedEmployee?.commission_pc || 0)) / 100);
-  const netPayable = (selectedEmployee?.base_salary || 0) + projectedCommission - totalDeductions;
+  const foodAllowance = selectedEmployee?.food_allowance || 0;
+  const netPayable = (selectedEmployee?.base_salary || 0) + foodAllowance + projectedCommission - totalDeductions - totalAdvanceTaken;
+
+  useEffect(() => {
+    if (isPaymentModalOpen && selectedEmployee) {
+      setPaymentData(prev => ({
+        ...prev,
+        amount: Math.round(netPayable)
+      }));
+    }
+  }, [isPaymentModalOpen, selectedEmployee, netPayable]);
+
+  useEffect(() => {
+    if (isAbsenceModalOpen && selectedEmployee) {
+      const rate = (selectedEmployee.base_salary || 0) / (selectedEmployee.working_days || 26);
+      setAbsenceData(prev => ({
+        ...prev,
+        deduction_amount: Math.round(rate)
+      }));
+    }
+  }, [isAbsenceModalOpen, selectedEmployee]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -297,7 +349,12 @@ export default function Employees() {
                     className={`border-b border-slate-50 hover:bg-slate-50 transition-colors cursor-pointer ${selectedEmployee?.id === e.id ? 'bg-primary/5' : ''}`}
                   >
                     <td className="p-4">
-                      <div className="font-bold text-slate-900">{e.name}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold text-slate-900">{e.name}</div>
+                        {e.status === 'inactive' && (
+                          <span className="text-[8px] px-1 py-0.5 bg-rose-100 text-rose-600 rounded font-black uppercase">Inactive</span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
                         <Phone className="w-2.5 h-2.5" /> {e.contact || 'N/A'}
                       </div>
@@ -316,6 +373,23 @@ export default function Employees() {
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button 
+                          onClick={(evt) => { 
+                            evt.stopPropagation(); 
+                            const newStatus = e.status === 'active' ? 'inactive' : 'active';
+                            if (confirm(`Mark ${e.name} as ${newStatus}?`)) {
+                              fetch('/api/employees', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ ...e, status: newStatus })
+                              }).then(() => fetchData());
+                            }
+                          }}
+                          className={`p-2 rounded-lg transition-colors ${e.status === 'active' ? 'text-slate-400 hover:bg-slate-100' : 'text-emerald-500 hover:bg-emerald-50'}`}
+                          title={e.status === 'active' ? 'Deactivate' : 'Activate'}
+                        >
+                          <Slash className="w-4 h-4" />
+                        </button>
                         <button 
                           onClick={(evt) => { evt.stopPropagation(); handleEdit(e); }}
                           className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
@@ -359,12 +433,12 @@ export default function Employees() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Base Salary</p>
-                      <p className="text-xl font-black">Rs. {selectedEmployee.base_salary?.toLocaleString()}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Gross Salary</p>
+                      <p className="text-xl font-black">Rs. {((selectedEmployee.base_salary || 0) + (selectedEmployee.food_allowance || 0))?.toLocaleString()}</p>
                     </div>
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
-                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Commission</p>
-                      <p className="text-xl font-black text-accent">{selectedEmployee.commission_pc}%</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Working Days</p>
+                      <p className="text-xl font-black text-accent">{selectedEmployee.working_days || 26}</p>
                     </div>
                   </div>
                 </div>
@@ -447,10 +521,14 @@ export default function Employees() {
                         <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Net Payable (This Month)</p>
                         <p className="text-lg font-black text-blue-900">Rs. {netPayable.toLocaleString()}</p>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-blue-200">
+                      <div className="grid grid-cols-5 gap-2 mt-4 pt-4 border-t border-blue-200">
                         <div className="text-center">
                           <p className="text-[8px] font-black text-blue-400 uppercase">Base</p>
                           <p className="text-xs font-bold text-blue-900">{selectedEmployee.base_salary.toLocaleString()}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[8px] font-black text-blue-400 uppercase">Food</p>
+                          <p className="text-xs font-bold text-emerald-600">+{foodAllowance.toLocaleString()}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[8px] font-black text-blue-400 uppercase">Comm.</p>
@@ -458,7 +536,11 @@ export default function Employees() {
                         </div>
                         <div className="text-center">
                           <p className="text-[8px] font-black text-blue-400 uppercase">Abs.</p>
-                          <p className="text-xs font-bold text-rose-600">-{totalDeductions.toLocaleString()}</p>
+                          <p className="text-xs font-bold text-rose-600">-{Math.round(totalDeductions).toLocaleString()}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[8px] font-black text-blue-400 uppercase">Adv.</p>
+                          <p className="text-xs font-bold text-rose-600">-{totalAdvanceTaken.toLocaleString()}</p>
                         </div>
                       </div>
                     </div>
@@ -472,7 +554,7 @@ export default function Employees() {
                               <div>
                                 <span className="font-bold text-slate-900">{p.month}</span>
                                 <span className="text-slate-400 mx-1">•</span>
-                                <span className="text-slate-500">{new Date(p.payment_date).toLocaleDateString()}</span>
+                                <span className="text-slate-500">{formatDate(p.payment_date)}</span>
                               </div>
                               <span className="font-black text-emerald-600">Rs. {p.amount.toLocaleString()}</span>
                             </div>
@@ -519,7 +601,7 @@ export default function Employees() {
                           {absences.map(a => (
                             <div key={a.id} className="flex justify-between items-center p-2 bg-slate-50 rounded-lg text-[10px]">
                               <div>
-                                <span className="font-bold text-slate-900">{new Date(a.date).toLocaleDateString()}</span>
+                                <span className="font-bold text-slate-900">{formatDate(a.date)}</span>
                                 <span className="text-slate-400 mx-1">•</span>
                                 <span className="text-slate-500">{a.reason}</span>
                               </div>
@@ -564,7 +646,7 @@ export default function Employees() {
                               <div>
                                 <span className="font-black text-slate-900">{l.type}</span>
                                 <span className="text-slate-400 mx-1">•</span>
-                                <span className="text-slate-500">{new Date(l.date).toLocaleDateString()}</span>
+                                <span className="text-slate-500">{formatDate(l.date)}</span>
                               </div>
                               <div className="text-right">
                                 <span className="font-bold text-slate-900">Rs. {l.amount.toLocaleString()}</span>
@@ -626,10 +708,27 @@ export default function Employees() {
                       onChange={(e) => setFormData({...formData, role: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none"
                     >
-                      <option value="SPO">SPO</option>
-                      <option value="Salesman">Salesman</option>
+                      <option value="Admin">Admin</option>
                       <option value="Accountant">Accountant</option>
-                      <option value="Warehouse">Warehouse</option>
+                      <option value="Salesman">Salesman</option>
+                      <option value="Business Development Manager">Business Development Manager</option>
+                      <option value="Marketing Manager">Marketing Manager</option>
+                      <option value="Deliveryman">Deliveryman</option>
+                      <option value="Driver">Driver</option>
+                      <option value="IT">IT</option>
+                      <option value="Office Boy">Office Boy</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 block">Status</label>
+                    <select 
+                      value={formData.status || 'active'}
+                      onChange={(e) => setFormData({...formData, status: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
                     </select>
                   </div>
 
@@ -660,6 +759,26 @@ export default function Employees() {
                       step="0.1"
                       value={formData.commission_pc || 0}
                       onChange={(e) => setFormData({...formData, commission_pc: Number(e.target.value)})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-slate-900 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 block">Food Allowance</label>
+                    <input 
+                      type="number" 
+                      value={formData.food_allowance || 0}
+                      onChange={(e) => setFormData({...formData, food_allowance: Number(e.target.value)})}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-slate-900 outline-none transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 block">Working Days</label>
+                    <input 
+                      type="number" 
+                      value={formData.working_days || 26}
+                      onChange={(e) => setFormData({...formData, working_days: Number(e.target.value)})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-slate-900 outline-none transition-all"
                     />
                   </div>

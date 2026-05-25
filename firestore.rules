@@ -1,0 +1,113 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function emailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function getEmail() {
+      return ("email" in request.auth.token) ? request.auth.token.email.lower() : "";
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == "hPUi6SFAV1M3Gu8yWcUzfYnUV3m2" ||
+        getEmail() == "haykhan84@gmail.com"
+      );
+    }
+
+    function isSubordinateOf(bossUid) {
+      return isAdmin() || (getEmail() != "" && 
+             exists(/databases/$(database)/documents/access_grants/$(bossUid + "_" + getEmail())));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidAccessGrant(data) {
+      return data.keys().hasAll(['bossUid', 'bossEmail', 'subordinateEmail', 'role', 'grantedAt']);
+    }
+
+    // --- Collections ---
+
+    // 1. IDENTITY & ACCESS
+    match /access_grants/{grantId} {
+      // Use explicit get and list for clarity
+      allow get, list: if isSignedIn();
+      
+      // Only the boss (creator) can create grants.
+      allow create: if isSignedIn() && 
+                      incoming().bossUid == request.auth.uid;
+      
+      // Updates and Deletes by boss or the subordinate themselves
+      allow update, delete: if isSignedIn() && (
+        resource.data.bossUid == request.auth.uid || 
+        resource.data.subordinateEmail == getEmail() ||
+        isAdmin()
+      );
+    }
+
+    // 2. USER PROFILES
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isSubordinateOf(userId));
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+
+      match /folders/{folderId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /files/{fileId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /notes/{noteId} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isSubordinateOf(userId));
+      }
+
+      match /teamMembers/{memberId} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isSubordinateOf(userId));
+      }
+
+      match /backups/{backupId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // 3. ERP COLLECTIONS (LEGACY/HYBRID)
+    match /skus/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /inventory/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /customers/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /employees/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /orders/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /order_items/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /vouchers/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /expenses/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /bank_accounts/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+    match /app_settings/{id} { allow read, write: if isSignedIn() || isAdmin(); }
+
+    // Global Safety Net at the BOTTOM
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

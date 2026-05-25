@@ -21,6 +21,8 @@
 @layer base {
   body {
     @apply bg-bg text-text antialiased font-sans;
+    background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+    background-size: 24px 24px;
   }
   
   :focus-visible {
@@ -29,11 +31,15 @@
 }
 
 .erp-card {
-  @apply bg-white border border-border rounded-lg shadow-sm hover:shadow-md transition-all p-5 flex flex-col;
+  @apply bg-white border border-slate-200 rounded-[2px] shadow-[4px_4px_0px_0px_rgba(26,24,77,0.1)] hover:shadow-[4px_4px_0px_0px_rgba(242,152,11,0.2)] transition-all p-6 relative overflow-hidden;
+  &::before {
+    content: "";
+    @apply absolute top-0 left-0 w-full h-[2px] bg-primary/10;
+  }
 }
 
 .card-title {
-  @apply text-[12px] font-semibold text-text-muted uppercase tracking-wider mb-4 border-b border-border pb-2;
+  @apply text-[10px] font-black uppercase tracking-[0.2em] text-text-muted mb-4 border-l-2 border-accent pl-3;
 }
 
 .big-metric {
@@ -49,11 +55,11 @@
 }
 
 .btn-primary {
-  @apply bg-accent text-white px-4 py-2 rounded font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 text-sm;
+  @apply bg-primary text-white font-black uppercase text-[10px] tracking-[0.2em] px-6 py-3 rounded-[2px] shadow-[2px_2px_0px_0px_#f2980b] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[3px_3px_0px_0px_#f2980b] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all flex items-center justify-center gap-2;
 }
 
 .btn-outline {
-  @apply border border-border text-text px-4 py-2 rounded font-medium hover:bg-bg transition-colors text-sm;
+  @apply border-2 border-slate-900 bg-transparent text-slate-900 font-black uppercase text-[10px] tracking-[0.2em] px-6 py-3 rounded-[2px] hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center gap-2;
 }
 
 .nav-item {
@@ -66,80 +72,85 @@
 
 /* Print Utilities */
 @media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    width: 100% !important;
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   aside, 
   header, 
   nav,
+  footer,
   .no-print, 
   .fixed,
-  button:not(.print-visible) {
+  .erp-card::before,
+  button,
+  .relative.z-10,
+  .relative.z-20 {
     display: none !important;
   }
 
-  main, .flex-1 {
-    margin: 0 !important;
+  /* Force hide all non-print elements while allowing ancestors of print-only to be visible but background-less */
+  main, #root, .flex-1, .min-h-screen {
+    background: white !important;
     padding: 0 !important;
+    margin: 0 !important;
     display: block !important;
     position: static !important;
+    overflow: visible !important;
     width: 100% !important;
+    min-height: auto !important;
   }
 
-  body {
-    background: white !important;
-    color: black !important;
-    font-size: 12pt !important;
-  }
-
-  .erp-card {
-    border: 1px solid #eee !important;
-    box-shadow: none !important;
-    margin: 0 0 20px 0 !important;
-    padding: 20px !important;
-    display: block !important;
-  }
-
-  .max-w-7xl, .container {
-    max-width: 100% !important;
-    width: 100% !important;
-    margin: 0 !important;
-  }
-
-  .grid {
-    display: block !important;
-  }
-
-  .grid-cols-1, .grid-cols-2, .lg\:grid-cols-2 {
-    display: block !important;
-  }
-
-  .grid > * {
-    margin-bottom: 20px !important;
-    page-break-inside: avoid;
-  }
-
-  table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-  }
-
-  td, th {
-    border: 1px solid #ddd !important;
-    padding: 8px !important;
-  }
-
-  th {
-    background-color: #f8f9fa !important;
-    -webkit-print-color-adjust: exact;
-  }
-
-  /* Force visibility for elements that must be printed */
   .print-only {
     display: block !important;
+    background: white !important;
+    position: relative !important;
+    z-index: 9999 !important;
   }
 
   @page {
-    size: auto;
-    margin: 5mm;
+    size: A5 portrait;
+    margin: 0;
   }
+
+  .printing-page {
+    width: 148mm;
+    height: 210mm;
+    padding: 10mm;
+    margin: 0 auto !important;
+    page-break-after: always;
+    page-break-inside: avoid;
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    background: white !important;
+    color: black !important;
+    box-sizing: border-box;
+    border: none !important;
+  }
+
+  .printing-container {
+    display: block !important;
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Reset all colors to black for printing to be safe */
+  .text-slate-900, .text-slate-800, .text-text { color: #000000 !important; }
+  .text-slate-400, .text-slate-500, .text-text-muted { color: #666666 !important; }
+  .bg-slate-50, .bg-slate-100 { background-color: transparent !important; }
 }
 
 .print-only {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, Search, Filter, ArrowDownCircle, Banknote, Receipt, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { formatDate } from '../lib/dateUtils';
 
 interface Expense {
   id: number;
@@ -8,18 +9,21 @@ interface Expense {
   amount: number;
   category: string;
   date: string;
+  payment_method: string;
 }
 
 export default function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newExpense, setNewExpense] = useState({
+  const [expenseRows, setExpenseRows] = useState([{
     description: '',
     amount: 0,
     category: 'General',
-    bank_account_id: ''
-  });
+    bank_account_id: '',
+    date: new Date().toISOString().split('T')[0],
+    payment_method: 'Cash'
+  }]);
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
 
   useEffect(() => {
@@ -27,42 +31,78 @@ export default function Expenses() {
     fetchBankAccounts();
   }, []);
 
-  const fetchExpenses = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/reports/expenses/daily'); // This returns grouped, let's add a detailed one
-      // Wait, let's add a detailed endpoint in server first
-      const resDet = await fetch('/api/expenses/detailed');
-      setExpenses(await resDet.json());
-    } catch (err) { console.error(err); }
-    setLoading(false);
-  };
-
   const fetchBankAccounts = async () => {
     const res = await fetch('/api/bank/accounts');
     setBankAccounts(await res.json());
   };
 
-  const handleAddExpense = async (e: React.FormEvent) => {
+  const fetchExpenses = async () => {
+    setLoading(true);
+    try {
+      const resDet = await fetch('/api/expenses/detailed');
+      const data = await resDet.json();
+      setExpenses(data);
+    } catch (err) { console.error(err); }
+    setLoading(false);
+  };
+
+  const addRow = () => {
+    setExpenseRows([...expenseRows, {
+      description: '',
+      amount: 0,
+      category: 'General',
+      bank_account_id: '',
+      date: new Date().toISOString().split('T')[0],
+      payment_method: 'Cash'
+    }]);
+  };
+
+  const removeRow = (index: number) => {
+    if (expenseRows.length > 1) {
+      setExpenseRows(expenseRows.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateRow = (index: number, field: string, value: any) => {
+    const newRows = [...expenseRows];
+    newRows[index] = { ...newRows[index], [field]: value };
+    setExpenseRows(newRows);
+  };
+
+  const handleAddExpenses = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetch('/api/expenses', {
+    const validRows = expenseRows.filter(r => r.description && r.amount > 0);
+    if (validRows.length === 0) {
+      alert("Please enter at least one valid expense row (Description and Amount required)");
+      return;
+    }
+
+    await fetch('/api/expenses/bulk', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newExpense)
+      body: JSON.stringify(validRows)
     });
+    
     setIsModalOpen(false);
-    setNewExpense({ description: '', amount: 0, category: 'General', bank_account_id: '' });
+    setExpenseRows([{
+      description: '', 
+      amount: 0, 
+      category: 'General', 
+      bank_account_id: '',
+      date: new Date().toISOString().split('T')[0],
+      payment_method: 'Cash'
+    }]);
     fetchExpenses();
   };
 
-  const categories = ['Salary', 'Fuel', 'Utilities', 'Rent', 'Maintenance', 'Entertainment', 'Marketing', 'General'];
+  const categories = ['Salary', 'Fuel', 'Utilities', 'Salesman', 'Office Admin', 'Internal', 'Rent', 'Maintenance', 'Marketing', 'General'];
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+    <div className="space-y-8 max-w-7xl mx-auto pb-12 px-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            DAILY <span className="text-rose-600 italic">EXPENSES</span>
+            EXPENSE <span className="text-rose-600 italic">MANAGER</span>
           </h1>
           <p className="text-slate-500 font-bold text-xs uppercase tracking-[0.2em] mt-1">Primelink Enterprises • Cash Outflow Tracking</p>
         </div>
@@ -71,7 +111,7 @@ export default function Expenses() {
           className="bg-rose-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-700 transition-all flex items-center gap-2 shadow-xl"
         >
           <Plus className="w-4 h-4" />
-          Record Expense
+          Batch Record
         </button>
       </div>
 
@@ -110,6 +150,7 @@ export default function Expenses() {
               <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <th className="p-4">Date</th>
                 <th className="p-4">Description</th>
+                <th className="p-4 text-center">Method</th>
                 <th className="p-4 text-right">Amount</th>
                 <th className="p-4 text-right">Category</th>
               </tr>
@@ -118,11 +159,16 @@ export default function Expenses() {
               {expenses.map(e => (
                 <tr key={e.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="p-4">
-                    <div className="text-xs font-bold text-slate-900">{new Date(e.date).toLocaleDateString()}</div>
+                    <div className="text-xs font-bold text-slate-900">{formatDate(e.date)}</div>
                     <div className="text-[10px] text-slate-400">{new Date(e.date).toLocaleTimeString()}</div>
                   </td>
                   <td className="p-4">
                     <div className="text-xs font-medium text-slate-900">{e.description}</div>
+                  </td>
+                  <td className="p-4 text-center">
+                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${e.payment_method === 'Online' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {e.payment_method || 'Cash'}
+                    </span>
                   </td>
                   <td className="p-4 text-right">
                     <div className="text-sm font-black text-rose-600">Rs. {e.amount.toLocaleString()}</div>
@@ -138,65 +184,136 @@ export default function Expenses() {
       </div>
 
       {isModalOpen && (
-        <Modal title="Record New Expense" onClose={() => setIsModalOpen(false)} onSubmit={handleAddExpense}>
-          <div className="space-y-4">
-            <FormInput label="Description" value={newExpense.description} onChange={v => setNewExpense({...newExpense, description: v})} required />
-            <FormInput label="Amount (PKR)" type="number" value={newExpense.amount} onChange={v => setNewExpense({...newExpense, amount: Number(v)})} required />
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 block">Category</label>
-              <select 
-                value={newExpense.category}
-                onChange={e => setNewExpense({...newExpense, category: e.target.value})}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
-              >
-                {categories.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-3xl w-full max-w-5xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-slate-900 p-6 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-widest leading-none">Batch Recording</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-widest">Multi-row Entry Mode • QuickBooks Style</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-colors">
+                <Trash2 className="w-5 h-5" />
+              </button>
             </div>
-            <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 block">Payment Source (Optional)</label>
-              <select 
-                value={newExpense.bank_account_id}
-                onChange={e => setNewExpense({...newExpense, bank_account_id: e.target.value})}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 border-b border-slate-100">
+                    <th className="p-4">Date</th>
+                    <th className="p-4">Description</th>
+                    <th className="p-4">Category</th>
+                    <th className="p-4">Method</th>
+                    <th className="p-4">Paid From</th>
+                    <th className="p-4 text-right">Amount</th>
+                    <th className="p-4 w-12 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {expenseRows.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="p-2">
+                        <input 
+                          type="date" value={row.date} onChange={e => updateRow(idx, 'date', e.target.value)}
+                          className="w-full bg-slate-100/50 border border-transparent focus:border-rose-500 rounded-lg p-2 text-[11px] font-bold outline-none"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <input 
+                          placeholder="What was this for?" value={row.description} onChange={e => updateRow(idx, 'description', e.target.value)}
+                          className="w-full bg-slate-100/50 border border-transparent focus:border-rose-500 rounded-lg p-2 text-[11px] font-bold outline-none ring-0 placeholder:text-slate-300"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <select 
+                          value={row.category} onChange={e => updateRow(idx, 'category', e.target.value)}
+                          className="w-full bg-slate-100/50 border border-transparent focus:border-rose-500 rounded-lg p-2 text-[11px] font-black uppercase tracking-tight outline-none"
+                        >
+                          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </td>
+                      <td className="p-2">
+                        <select 
+                          value={row.payment_method} 
+                          onChange={e => {
+                            const method = e.target.value;
+                            const newRows = [...expenseRows];
+                            newRows[idx] = { 
+                              ...newRows[idx], 
+                              payment_method: method, 
+                              bank_account_id: method === 'Cash' ? '' : newRows[idx].bank_account_id 
+                            };
+                            setExpenseRows(newRows);
+                          }}
+                          className="w-full bg-slate-100/50 border border-transparent focus:border-rose-500 rounded-lg p-2 text-[11px] font-black uppercase tracking-tight outline-none"
+                        >
+                          <option value="Cash">Cash</option>
+                          <option value="Online">Online</option>
+                        </select>
+                      </td>
+                      <td className="p-2">
+                        {row.payment_method === 'Online' ? (
+                          <select 
+                            value={row.bank_account_id} onChange={e => updateRow(idx, 'bank_account_id', e.target.value)}
+                            className="w-full bg-emerald-50 border border-emerald-100 rounded-lg p-2 text-[10px] font-black uppercase outline-none text-emerald-700"
+                          >
+                            <option value="">Choose Bank</option>
+                            {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.bank_name}</option>)}
+                          </select>
+                        ) : (
+                          <div className="p-2 text-[10px] font-black text-slate-300 uppercase italic">Counter Cash</div>
+                        )}
+                      </td>
+                      <td className="p-2 text-right">
+                        <input 
+                          type="number" placeholder="0" value={row.amount || ''} onChange={e => updateRow(idx, 'amount', Number(e.target.value))}
+                          className="w-24 bg-slate-100/50 border border-transparent focus:border-rose-500 rounded-lg p-2 text-[11px] font-black text-right outline-none ring-0 text-rose-600 placeholder:text-rose-200"
+                        />
+                      </td>
+                      <td className="p-2 text-center">
+                        <button onClick={() => removeRow(idx)} className="p-2 text-slate-300 hover:text-rose-600 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              
+              <button 
+                onClick={addRow}
+                className="mt-4 flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
               >
-                <option value="">Counter Cash (Physical)</option>
-                {bankAccounts.map(a => <option key={a.id} value={a.id}>{a.bank_name} ({a.account_number})</option>)}
-              </select>
+                <Plus className="w-3.5 h-3.5" />
+                Add New Row
+              </button>
             </div>
-          </div>
-        </Modal>
-      )}
-    </div>
-  );
-}
 
-function Modal({ title, children, onClose, onSubmit }: any) {
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
-        <div className="bg-slate-900 p-6 text-white text-center">
-          <h3 className="text-xl font-black uppercase tracking-widest">{title}</h3>
+            <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Outflow</span>
+                <span className="text-xl font-black text-rose-600 italic leading-none mt-0.5">
+                  Rs. {expenseRows.reduce((sum, r) => sum + (r.amount || 0), 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="px-6 py-3 font-black uppercase text-[10px] tracking-widest text-slate-400 hover:text-slate-600 transition-all"
+                >
+                  Discard
+                </button>
+                <button 
+                  onClick={handleAddExpenses}
+                  className="px-8 py-3 bg-rose-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-rose-200 hover:bg-rose-700 active:scale-95 transition-all"
+                >
+                  Commit Batch
+                </button>
+              </div>
+            </div>
+          </motion.div>
         </div>
-        <form onSubmit={onSubmit} className="p-8">
-          {children}
-          <div className="flex gap-3 pt-8">
-            <button type="button" onClick={onClose} className="flex-1 py-4 font-black uppercase text-xs tracking-widest text-slate-400">Cancel</button>
-            <button type="submit" className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl">Confirm Outflow</button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
-  );
-}
-
-function FormInput({ label, type = 'text', value, onChange, required, placeholder }: any) {
-  return (
-    <div>
-      <label className="text-[10px] font-black text-slate-400 uppercase mb-1.5 block">{label}</label>
-      <input 
-        required={required} type={type} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
-        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none shadow-sm"
-      />
+      )}
     </div>
   );
 }

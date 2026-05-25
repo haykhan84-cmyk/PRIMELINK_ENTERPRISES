@@ -1,9 +1,11 @@
 {
-  "name": "Swat DMS Enterprise",
-  "description": "Comprehensive Distribution Management System with Offline-First sync, PRS settlement, double-entry vouchers, and dual-invoice cost-cutting templates.",
+  "name": "Primelink DMS",
+  "description": "Comprehensive Distribution Management System with integrated Roznamcha digital daybook cash book ledger, receipt photo attachment snaps, Offline-First sync, PRS settlement, double-entry vouchers, and dual-invoice cost-cutting templates.",
   "requestFramePermissions": [
     "camera",
     "geolocation"
   ],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

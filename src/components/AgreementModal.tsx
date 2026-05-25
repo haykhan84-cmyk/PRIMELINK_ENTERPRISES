@@ -50,7 +50,7 @@ export default function AgreementModal({ onAccept }: AgreementModalProps) {
           </div>
           <div>
             <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Employment Compliance Agreement</h2>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Swat Distribution Management System v4.0</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Primelink Distribution Management System v4.0</p>
           </div>
         </div>
 
@@ -61,7 +61,7 @@ export default function AgreementModal({ onAccept }: AgreementModalProps) {
         >
           <section className="space-y-3">
             <h3 className="font-bold text-slate-900 uppercase text-xs tracking-widest">1. GPS & Field Tracking</h3>
-            <p>As a field employee of Swat DMS, you acknowledge that your GPS location will be captured during order bookings. You must be within a 50m radius of the customer's registered location for an order to be considered valid for commission calculation.</p>
+            <p>As a field employee of Primelink DMS, you acknowledge that your GPS location will be captured during order bookings. You must be within a 50m radius of the customer's registered location for an order to be considered valid for commission calculation.</p>
           </section>
 
           <section className="space-y-3">
