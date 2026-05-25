@@ -79,24 +79,29 @@ export default function Dashboard({ isUrdu }: { isUrdu?: boolean }) {
       const res = await fetch('/api/dashboard/stats');
       const data = await res.json();
       setStats(data);
+      setLoading(false);
       
-      // If system looks empty, check for cloud snapshots
+      // If system looks empty, check for cloud snapshots in the background
       if (data.totalOrders === 0 && data.activeEmployees <= 2 && workspaceUid) {
         setCheckingBackups(true);
         const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
         const { db } = await import('../lib/firebase');
         const backupsRef = collection(db, 'users', workspaceUid, 'backups');
         const q = query(backupsRef, orderBy('createdAt', 'desc'), limit(5));
-        const snap = await getDocs(q);
-        const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Suggest the latest one that actually has some data if possible
-        const bestBackup = docs.find((b: any) => (b.count?.customers || 0) > 2) || docs[0];
-        setCloudBackups(bestBackup ? [bestBackup] : []);
-        setCheckingBackups(false);
+        
+        getDocs(q).then((snap) => {
+          const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          // Suggest the latest one that actually has some data if possible
+          const bestBackup = docs.find((b: any) => (b.count?.customers || 0) > 2) || docs[0];
+          setCloudBackups(bestBackup ? [bestBackup] : []);
+        }).catch((err) => {
+          console.warn("[Dashboard] Background cloud backup check failed:", err);
+        }).finally(() => {
+          setCheckingBackups(false);
+        });
       }
     } catch (err) {
       console.error(err);
-    } finally {
       setLoading(false);
     }
   };
